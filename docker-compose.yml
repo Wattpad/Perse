@@ -1,0 +1,12 @@
+version: '2'
+services:
+  web:
+    build: .
+    command: python manage.py dns_server
+    environment:
+        - DEBUG=true
+    volumes:
+      - .:/code
+    ports:
+      - "53:10053"
+      - "53:10053/udp"
