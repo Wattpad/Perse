@@ -4,7 +4,7 @@ services:
     build: .
     command: python manage.py dns_server
     environment:
-        - DEBUG=true
+        - PYTHONUNBUFFERED=1
     volumes:
       - .:/code
     ports:
