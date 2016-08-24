@@ -1,29 +1,27 @@
 from django.conf import settings
 from twisted.internet import reactor, defer
-from twisted.names import client, dns, error, server
-
-from models import Record
+from twisted.names import client, dns, server
 
 
-class Resolver(object):
-    def query(self, query, timeout=None):
-        try:
-            name = query.name.name
-            rec = Record.objects.get(name=name)
-            answer = dns.RRHeader(
-                name=name,
-                payload=dns.Record_A(address=rec.ip),
-            )
-            answers = [answer]
-            authority = []
-            additional = []
-            return defer.succeed((answers, authority, additional))
-        except Record.DoesNotExist:
-            return defer.fail(error.DomainError())
+class FixedResolver(object):
+    default_proxy_ip = '192.168.0.1'
+
+    def get_fixed_response(self, query):
+        name = query.name.name
+        answer = dns.RRHeader(
+            name=name,
+            payload=dns.Record_A(address=self.default_proxy_ip))
+        answers = [answer]
+        authority = []
+        additional = []
+        return answers, authority, additional
+
+    def query(self, query_, timeout=None):
+        return defer.succeed(self.get_fixed_response(query_))
 
 
 def run():
-    clients = [Resolver()]
+    clients = [FixedResolver()]
     if settings.DNS_RELAY:
         clients.append(client.Resolver(resolv='/etc/resolv.conf'))
 

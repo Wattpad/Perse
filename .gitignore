@@ -2,6 +2,7 @@
 *.sqlite*
 *.pid
 
+.idea/
 build/
 dist/
 *.egg-info/
