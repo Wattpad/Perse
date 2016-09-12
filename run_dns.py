@@ -3,7 +3,7 @@ import subprocess
 
 
 build = 'docker build . -f Dockerfile_dns'
-run = 'docker run -p "53:10053/tcp" -p "53:10053/udp" {}'
+run = 'docker run -p "53:53/tcp" -p "53:53/udp" {}'
 kill = 'docker kill {}'
 
 image = subprocess.check_output(build, shell=True).strip().split('\n')[-1].split()[-1]

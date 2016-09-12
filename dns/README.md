@@ -22,6 +22,6 @@ Install Docker and run
 
 Run:
 
-- `./manage.py dns_server` for DNS interface (listens on TCP/UDP 10053)
+- `./manage.py dns_server` for DNS interface (listens on TCP/UDP 53)
 
 - `./manage.py test` runs tests.

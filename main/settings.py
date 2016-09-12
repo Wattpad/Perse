@@ -96,7 +96,7 @@ STATIC_ROOT = os.path.expanduser('~/static/')
 
 # Real DNS handling
 
-DNS_PORT = 10053
+DNS_PORT = 53
 
 # beware of DNS Amplification Attack,
 # set to True only if this is not an open relay
