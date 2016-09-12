@@ -1,23 +1,24 @@
 # -*- coding: utf-8 -*-
-import sys
-import os
-import socket
-import ssl
-import select
-import httplib
-import urlparse
-import threading
 import brotli
 import gzip
-import zlib
-import time
+import httplib
 import json
+import os
 import re
+import select
+import socket
+import ssl
+import sys
+import threading
+import time
+import urlparse
+import zlib
+
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+from HTMLParser import HTMLParser
 from SocketServer import ThreadingMixIn
 from cStringIO import StringIO
 from subprocess import Popen, PIPE
-from HTMLParser import HTMLParser
 
 from django.conf import settings
 
