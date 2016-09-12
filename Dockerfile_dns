@@ -2,9 +2,8 @@ FROM python:2.7
 ENV PYTHONUNBUFFERED 1
 RUN mkdir /code
 WORKDIR /code
-ADD requirements.txt /code/
-RUN pip install -r requirements.txt
 ADD . /code/
+RUN pip install -r requirements.txt
 EXPOSE "53/tcp"
 EXPOSE "53/udp"
 CMD python manage.py dns_server
