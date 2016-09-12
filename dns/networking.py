@@ -4,7 +4,7 @@ from twisted.names import client, dns, server
 
 
 class FixedResolver(object):
-    default_proxy_ip = '192.168.0.1'
+    default_proxy_ip = '127.0.0.1'
 
     def get_fixed_response(self, query):
         name = query.name.name
@@ -21,6 +21,7 @@ class FixedResolver(object):
 
 
 def run():
+    print("Started")
     clients = [FixedResolver()]
     if settings.DNS_RELAY:
         clients.append(client.Resolver(resolv='/etc/resolv.conf'))

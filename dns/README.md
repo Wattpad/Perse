@@ -13,8 +13,10 @@ Needed: Python 2.7 (Twisted's DNS server isn't supported in version 3, unfortuna
 
 ## Production use
 
-Install Docker and run `docker run -p "53:10053/tcp" -p "53:10053/udp"`
-
+Install Docker and run
+```
+./run_dns.py
+```
 
 ## Developing
 
