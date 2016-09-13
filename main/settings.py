@@ -11,7 +11,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEBUG = 'DEBUG' in os.environ
 
 # SECURITY WARNING: keep the secret key used in production secret!
-if DEBUG or True:
+if DEBUG:
     SECRET_KEY = 'eywn@(ruzyx0z2#c^b-3!tuv*l29n#%577j(1=pjt7=28xd4gl'
 if 'SECRET_KEY' in os.environ:
     SECRET_KEY = os.environ['SECRET_KEY']

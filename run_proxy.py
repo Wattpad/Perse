@@ -3,7 +3,7 @@ import subprocess
 
 
 build = 'docker build . -f Dockerfile_proxy'
-run = 'docker run -p "80:80" -p "443:443" --dns="8.8.8.8" {}'
+run = 'docker run -p "80:80" -p "443:443" --dns="8.8.4.4" --dns "8.8.8.8" {}'
 kill = 'docker kill {}'
 
 image = subprocess.check_output(build, shell=True).strip().split('\n')[-1].split()[-1]
