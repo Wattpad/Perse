@@ -409,3 +409,5 @@ def run():
     https_thread = threading.Thread(target=run_https, args=[])
     http_thread.start()
     https_thread.start()
+    http_thread.join()
+    https_thread.join()
