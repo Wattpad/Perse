@@ -70,7 +70,15 @@ WSGI_APPLICATION = 'main.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/1.10/ref/settings/#databases
 
-DATABASES = {}
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'rewrite_db',
+        'USER': 'docker',
+        'HOST': '127.0.0.1',
+        'PORT': '5432',
+    }
+}
 
 
 # Internationalization
@@ -101,15 +109,6 @@ DNS_PORT = 53
 # beware of DNS Amplification Attack,
 # set to True only if this is not an open relay
 DNS_RELAY = False
-
-
-# REST API
-
-REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.DjangoModelPermissions',
-    ]
-}
 
 
 try:
