@@ -1,12 +1,21 @@
 version: '2'
 services:
-  web:
-    build: .
+  dns:
+    build:
+        context: .
+        dockerfile: Dockerfile_dns
     command: python manage.py dns_server
-    environment:
-        - PYTHONUNBUFFERED=1
-    volumes:
-      - .:/code
     ports:
-      - "53:10053"
-      - "53:10053/udp"
+      - "53:53"
+      - "53:53/udp"
+  proxy:
+    build:
+        context: .
+        dockerfile: Dockerfile_proxy
+    command: python manage.py runproxy
+    ports:
+      - "80:80"
+      - "443:443"
+    dns:
+      - 8.8.4.4
+      - 8.8.8.8
