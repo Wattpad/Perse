@@ -75,7 +75,8 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'rewrite_db',
         'USER': 'docker',
-        'HOST': '127.0.0.1',
+        'PASSWORD': 'docker',
+        'HOST': 'postgresql',  # this is the name of the database service
         'PORT': '5432',
     }
 }

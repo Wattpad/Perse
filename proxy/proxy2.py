@@ -21,6 +21,7 @@ from cStringIO import StringIO
 from subprocess import Popen, PIPE
 
 from django.conf import settings
+from proxy.models import RewriteRules
 
 
 def with_color(c, s):
@@ -153,12 +154,12 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             return
 
         req_body_modified = self.request_handler(req, req_body)
-        if req_body_modified is False:
-            self.send_error(403)
-            return
-        elif req_body_modified is not None:
+        if req_body_modified:
             req_body = req_body_modified
             req.headers['Content-length'] = str(len(req_body))
+        elif req_body_modified is False:
+            self.send_error(403)
+            return
 
         u = urlparse.urlsplit(req.path)
         scheme, netloc, path = u.scheme, u.netloc, (u.path + '?' + u.query if u.query else u.path)
@@ -166,6 +167,18 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         if netloc:
             req.headers['Host'] = netloc
         req_headers = self.filter_headers(req.headers)
+
+        intercepted_body = self.intercept_handler(req)
+        if intercepted_body is not None:
+            intercepted_body = intercepted_body.encode('utf-8')
+            self.wfile.write("%s %d %s\r\n" % (self.protocol_version, 200, ''))
+            self.wfile.write('Content-Encoding: identity\r\n')
+            self.wfile.write('Content-Length: {}\r\n'.format(str(len(intercepted_body))))
+            self.wfile.write('Content-Type: charset=UTF-8\r\n')
+            self.end_headers()
+            self.wfile.write(intercepted_body)
+            self.wfile.flush()
+            return
 
         try:
             origin = (scheme, netloc)
@@ -185,20 +198,20 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             return
 
         version_table = {10: 'HTTP/1.0', 11: 'HTTP/1.1'}
-        setattr(res, 'headers', res.msg)
-        setattr(res, 'response_version', version_table[res.version])
+        res.headers = res.msg
+        res.response_version = version_table[res.version]
 
         content_encoding = res.headers.get('Content-Encoding', 'identity')
         res_body_plain = self.decode_content_body(res_body, content_encoding)
 
         res_body_modified = self.response_handler(req, req_body, res, res_body_plain)
-        if res_body_modified is False:
-            self.send_error(403)
-            return
-        elif res_body_modified is not None:
+        if res_body_modified:
             res_body_plain = res_body_modified
             res_body = self.encode_content_body(res_body_plain, content_encoding)
             res.headers['Content-Length'] = str(len(res_body))
+        elif res_body_modified is False:
+            self.send_error(403)
+            return
 
         res_headers = self.filter_headers(res.headers)
 
@@ -209,8 +222,9 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(res_body)
         self.wfile.flush()
 
-        with self.lock:
-            self.save_handler(req, req_body, res, res_body_plain)
+        # Uncomment if you want to do something with the response
+        # with self.lock:
+        #     self.save_handler(req, req_body, res, res_body_plain)
 
     do_HEAD = do_GET
     do_POST = do_GET
@@ -288,8 +302,6 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         def parse_qsl(s):
             return '\n'.join("%-20s %s" % (k, v) for k, v in urlparse.parse_qsl(s, keep_blank_values=True))
 
-        if not settings.DEBUG:
-            return
         req_header_text = "%s %s %s\n%s" % (req.command, req.path, req.request_version, req.headers)
         res_header_text = "%s %d %s\n%s" % (res.response_version, res.status, res.reason, res.headers)
 
@@ -366,6 +378,25 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             if res_body_text:
                 print with_color(32, "==== RESPONSE BODY ====\n%s\n" % res_body_text)
 
+    def intercept_handler(self, req):
+        matched_entries = set()
+        # match url
+        for regex in RewriteRules.objects.all():
+            if re.match(regex.url, req.path):
+                matched_entries.add(regex)
+        headers = {h.lower().replace('-', '_'): req.headers[h] for h in req.headers}
+        if not matched_entries:
+            return
+        # match headers
+        for entry in matched_entries:
+            for header in entry.headers:
+                lowercase = header.lower().replace('-', '_')
+                if lowercase in headers and re.match(entry.headers[header], headers[lowercase]):
+                    continue
+                break
+            else:
+                return entry.response
+
     def request_handler(self, req, req_body):
         pass
 
@@ -373,7 +404,8 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         pass
 
     def save_handler(self, req, req_body, res, res_body):
-        self.print_info(req, req_body, res, res_body)
+        if settings.DEBUG:
+            self.print_info(req, req_body, res, res_body)
 
 
 def run_http(HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPServer, protocol="HTTP/1.1"):
