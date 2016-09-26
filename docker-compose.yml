@@ -35,7 +35,7 @@ services:
     volumes_from:
       - postgresql
   postgresql:
-    image: postgres:9.5
+    image: postgres:9.5.4
     environment:
       - POSTGRES_DB=rewrite_db
       - POSTGRES_USER=docker
