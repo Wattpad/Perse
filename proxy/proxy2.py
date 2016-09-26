@@ -381,7 +381,8 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     def intercept_handler(self, req):
         matched_entries = set()
         # match url
-        for regex in RewriteRules.objects.all():
+        database_objs = [x for x in RewriteRules.objects.all()]
+        for regex in database_objs:
             if re.match(regex.url, req.path):
                 matched_entries.add(regex)
         headers = {h.lower().replace('-', '_'): req.headers[h] for h in req.headers}
