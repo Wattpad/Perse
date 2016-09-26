@@ -1,0 +1,69 @@
+{% extends 'base/base.html' %}
+
+{% block content %}
+<style type="text/css">
+    th {
+         text-align:center;
+         padding-bottom:0;
+    }
+</style>
+
+<div class="container-fluid">
+    <h1>Ads Data</h1>
+    <p><a id="toggleButton" class="btn btn-primary" data-toggle="collapse" onclick="toggleCollapse();" data-is-toggled="true">Expand All</a></p>
+    <div id="accordion">
+        <table class="table-hover" border="1" style="width:100%">
+            <tr>
+                <th>UUID</th>
+                <th>JSON</th>
+                <th>Date Created</th>
+                <th>Action</th>
+            </tr>
+            {% for entry in entries %}
+            <tr>
+                <td style="min-width:200px;width:200px">{{ entry.key }}</td>
+                <td>
+                    <div class="panel-heading" id="heading{{ forloop.counter }}">
+                        <h4 class="panel-title">
+                            <a data-toggle="collapse" href="#collapse{{ forloop.counter }}" aria-expanded="true" aria-controls="collapse{{ forloop.counter }}">
+                                Click to view
+                            </a>
+                        </h4>
+                    </div>
+                    <div id="collapse{{ forloop.counter }}" class="panel-collapse collapse out" role="tabpanel" aria-labelledby="heading{{ forloop.counter }}">
+                        {{ entry.json }}
+                    </div>
+                </td>
+                <td style="min-width:175px;width:175px">{{ entry.created_date }}</td>
+                <td style="min-width:33px;width:33px;text-align:center">
+                    <form id="delete" action="{% url 'ads:delete' %}" method="post" style="display:inline">
+                        {% csrf_token %}
+                        <input type="text" name="delete" class="hidden">
+                        <input type="text" value="{{ entry.key }}" name={{ uuid }} class="hidden">
+                        <button type="submit" class="btn-sm btn-default glyphicon glyphicon-remove"
+                                id="deleteButton{{ forloop.counter }}" title="Delete"
+                                style="padding:0.5em;border:none;background:none"
+                                onclick="return confirm('Delete uuid {{ entry.key }}?')"></button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<script>
+    function toggleCollapse() {
+        if ($('#toggleButton')[0].getAttribute('data-is-toggled') == "true") {
+            $('#accordion .panel-collapse').collapse('show');
+            $('#toggleButton')[0].setAttribute('data-is-toggled', "false");
+            $('#toggleButton').text("Collapse All");
+        } else {
+            $('#accordion .panel-collapse').collapse('hide');
+            $('#toggleButton')[0].setAttribute('data-is-toggled', "true");
+            $('#toggleButton').text("Expand All");
+        }
+    }
+</script>
+
+{% endblock %}
