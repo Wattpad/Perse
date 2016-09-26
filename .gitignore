@@ -8,6 +8,7 @@
 build/
 dist/
 certs/
+data/
 *.egg-info/
 
 settings_local.py
