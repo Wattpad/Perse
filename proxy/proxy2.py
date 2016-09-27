@@ -379,24 +379,24 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                 print with_color(32, "==== RESPONSE BODY ====\n%s\n" % res_body_text)
 
     def intercept_handler(self, req):
-        matched_entries = set()
+        matched_entries = []
         # match url
-        database_objs = [x for x in RewriteRules.objects.all()]
+        database_objs = RewriteRules.objects.values('url', 'headers', 'response')
         for regex in database_objs:
-            if re.match(regex.url, req.path):
-                matched_entries.add(regex)
+            if re.match(regex['url'], req.path):
+                matched_entries.append(regex)
         headers = {h.lower().replace('-', '_'): req.headers[h] for h in req.headers}
         if not matched_entries:
             return
         # match headers
         for entry in matched_entries:
-            for header in entry.headers:
+            for header in entry['headers']:
                 lowercase = header.lower().replace('-', '_')
-                if lowercase in headers and re.match(entry.headers[header], headers[lowercase]):
+                if lowercase in headers and re.match(entry['headers'][header], headers[lowercase]):
                     continue
                 break
             else:
-                return entry.response
+                return entry['response']
 
     def request_handler(self, req, req_body):
         pass
