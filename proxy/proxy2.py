@@ -23,6 +23,7 @@ from subprocess import Popen, PIPE
 
 from django.conf import settings
 from proxy.models import RewriteRules
+from .helper import format_header_keys
 
 
 def with_color(c, s):
@@ -383,17 +384,17 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             if res_body_text:
                 print with_color(32, "==== RESPONSE BODY ====\n%s\n" % res_body_text)
 
-    def _check_header_matches(self, header_name, db_headers, req_headers):
+    def _check_header_matches(self, header_name, header_value_regex, req_headers):
         """
         Checks whether a header pair from a request's headers matches the regex defined in the database with the same
         header key.
 
         :param header_name: the name of a header (str)
-        :param db_headers: a dict of {header names: regex}
+        :param header_value_regex: a regex string that will be matched to `req_headers`'s header value
         :param req_headers: a dict of {header names: header value}
         :return: whether the request header value matches the regex in the database
         """
-        return header_name in req_headers and re.match(db_headers[header_name], req_headers[header_name])
+        return header_name in req_headers and re.match(header_value_regex, req_headers[header_name])
 
     def intercept_handler(self, req):
         db_objs = RewriteRules.objects.values('url', 'headers', 'response')  # a dict
@@ -406,10 +407,10 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         if not db_matches:
             return
         # we treat our headers as case-insensitive and also replace hyphens with underscores
-        req_headers = {h.lower().replace('-', '_'): req.headers[h] for h in req.headers}
+        req_headers = format_header_keys(dict(req.headers))
         for db_match in db_matches:
             # check if ALL request headers matches the regex in the database, then return the database response
-            if all(self._check_header_matches(db_match_header, db_match['headers'], req_headers)
+            if all(self._check_header_matches(db_match_header, db_match['headers'][db_match_header], req_headers)
                    for db_match_header in db_match['headers']):
                 # if the loop finishes without breaking, then all headers have matched and we return the response
                 return db_match['response']
@@ -435,7 +436,7 @@ def run_http(HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPServer, 
     sa = httpd.socket.getsockname()
     print('*' * 80)
     print("Serving HTTP Proxy on {} port {}...".format(sa[0], sa[1]))
-    httpd.serve_forever(0.33)
+    httpd.serve_forever()
 
 
 def run_https(HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPSServer, protocol="HTTP/1.1"):
@@ -448,7 +449,7 @@ def run_https(HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPSServer
     sa = httpd.socket.getsockname()
     print('*' * 80)
     print("Serving HTTPS Proxy on {} port {}...".format(sa[0], sa[1]))
-    httpd.serve_forever(0.33)
+    httpd.serve_forever()
 
 
 def run():
