@@ -16,15 +16,15 @@ def get_use_regex_header_name():
     return 'HTTP_USE_REGEX'
 
 
-def format_header_keys(header):
+def format_header_keys(headers):
     """
     Returns a dictionary of {header_key: header_value, ...}, whereeach header_key is lowercased and its
     hyphens are replaced with underscores.
 
-    :param header: header dict
+    :param headers: header dict
     :return: header dict with modified keys
     """
-    return {k.lower().replace('-', '_'): v for k, v in header.iteritems()}
+    return {k.lower().replace('-', '_'): v for k, v in headers.iteritems()}
 
 
 def get_all_from_request_headers(req_headers, use_default_values=False):

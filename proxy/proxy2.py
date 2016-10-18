@@ -226,7 +226,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(res_body)
         self.wfile.flush()
 
-        # # Uncomment if you want to do something with the response
+        # Uncomment below if you want to do something with the response
         # with self.lock:
         #     self.save_handler(req, req_body, res, res_body_plain)
 
