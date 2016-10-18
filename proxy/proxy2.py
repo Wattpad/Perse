@@ -2,6 +2,7 @@
 import brotli
 import gzip
 import httplib
+import gc
 import json
 import os
 import re
@@ -67,7 +68,9 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     cacert = 'ca.crt'
     certkey = 'cert.key'
     certdir = 'certs/'
-    timeout = 7
+    timeout = 0.75  # overridden attribute for the socket connection
+    request_timeout = 10  # timeout for the request
+
     lock = threading.Lock()
 
     def __init__(self, *args, **kwargs):
@@ -184,13 +187,14 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             origin = (scheme, netloc)
             if origin not in self.tls.conns:
                 if scheme == 'https':
-                    self.tls.conns[origin] = httplib.HTTPSConnection(netloc, timeout=self.timeout)
+                    self.tls.conns[origin] = httplib.HTTPSConnection(netloc, timeout=self.request_timeout)
                 else:
-                    self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.timeout)
+                    self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.request_timeout)
             conn = self.tls.conns[origin]
             conn.request(self.command, path, req_body, dict(req_headers))
             res = conn.getresponse()
             res_body = res.read()
+            conn.close()
         except Exception as e:
             if origin in self.tls.conns:
                 del self.tls.conns[origin]
@@ -222,13 +226,14 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(res_body)
         self.wfile.flush()
 
-        # Uncomment if you want to do something with the response
+        # # Uncomment if you want to do something with the response
         # with self.lock:
         #     self.save_handler(req, req_body, res, res_body_plain)
 
     do_HEAD = do_GET
     do_POST = do_GET
     do_OPTIONS = do_GET
+    do_DELETE = do_GET
 
     def filter_headers(self, headers):
         # http://tools.ietf.org/html/rfc2616#section-13.5.1
@@ -378,25 +383,36 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             if res_body_text:
                 print with_color(32, "==== RESPONSE BODY ====\n%s\n" % res_body_text)
 
+    def _check_header_matches(self, header_name, db_headers, req_headers):
+        """
+        Checks whether a header pair from a request's headers matches the regex defined in the database with the same
+        header key.
+
+        :param header_name: the name of a header (str)
+        :param db_headers: a dict of {header names: regex}
+        :param req_headers: a dict of {header names: header value}
+        :return: whether the request header value matches the regex in the database
+        """
+        return header_name in req_headers and re.match(db_headers[header_name], req_headers[header_name])
+
     def intercept_handler(self, req):
-        matched_entries = []
-        # match url
-        database_objs = RewriteRules.objects.values('url', 'headers', 'response')
-        for regex in database_objs:
-            if re.match(regex['url'], req.path):
-                matched_entries.append(regex)
-        headers = {h.lower().replace('-', '_'): req.headers[h] for h in req.headers}
-        if not matched_entries:
+        db_objs = RewriteRules.objects.values('url', 'headers', 'response')  # a dict
+        db_matches = []  # will contain the tuples from `db_objs` that match the url regex
+        for db_obj in db_objs:
+            if re.match(db_obj['url'], req.path):
+                db_matches.append(db_obj)
+        # run the garbage collector since postgres doesn't seem to be closing connections
+        gc.collect()
+        if not db_matches:
             return
-        # match headers
-        for entry in matched_entries:
-            for header in entry['headers']:
-                lowercase = header.lower().replace('-', '_')
-                if lowercase in headers and re.match(entry['headers'][header], headers[lowercase]):
-                    continue
-                break
-            else:
-                return entry['response']
+        # we treat our headers as case-insensitive and also replace hyphens with underscores
+        req_headers = {h.lower().replace('-', '_'): req.headers[h] for h in req.headers}
+        for db_match in db_matches:
+            # check if ALL request headers matches the regex in the database, then return the database response
+            if all(self._check_header_matches(db_match_header, db_match['headers'], req_headers)
+                   for db_match_header in db_match['headers']):
+                # if the loop finishes without breaking, then all headers have matched and we return the response
+                return db_match['response']
 
     def request_handler(self, req, req_body):
         pass
@@ -419,7 +435,7 @@ def run_http(HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPServer, 
     sa = httpd.socket.getsockname()
     print('*' * 80)
     print("Serving HTTP Proxy on {} port {}...".format(sa[0], sa[1]))
-    httpd.serve_forever()
+    httpd.serve_forever(0.33)
 
 
 def run_https(HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPSServer, protocol="HTTP/1.1"):
@@ -431,10 +447,8 @@ def run_https(HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPSServer
 
     sa = httpd.socket.getsockname()
     print('*' * 80)
-    print("There may be an issue with Chrome on OS X:")
-    print("See http://stackoverflow.com/questions/27294589/")
     print("Serving HTTPS Proxy on {} port {}...".format(sa[0], sa[1]))
-    httpd.serve_forever()
+    httpd.serve_forever(0.33)
 
 
 def run():

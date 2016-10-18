@@ -16,6 +16,17 @@ def get_use_regex_header_name():
     return 'HTTP_USE_REGEX'
 
 
+def format_header_keys(header):
+    """
+    Returns a dictionary of {header_key: header_value, ...}, whereeach header_key is lowercased and its
+    hyphens are replaced with underscores.
+
+    :param header: header dict
+    :return: header dict with modified keys
+    """
+    return {k.lower().replace('-', '_'): v for k, v in header.iteritems()}
+
+
 def get_all_from_request_headers(req_headers, use_default_values=False):
     """
     Returns a tuple of (url=str/None, headers=dict/None, use_regex=str/None)
@@ -26,7 +37,7 @@ def get_all_from_request_headers(req_headers, use_default_values=False):
     """
     headers = req_headers.get(get_headers_header_name(), '{}' if use_default_values else None)
     return (req_headers.get(get_url_header_name(), '.*' if use_default_values else None),
-            json.loads(headers) if headers is not None else None,
+            format_header_keys(json.loads(headers)) if headers is not None else None,
             req_headers.get(get_use_regex_header_name(), '1' if use_default_values else None))
 
 

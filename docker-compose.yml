@@ -21,6 +21,8 @@ services:
       - 8.8.8.8
     links:
       - postgresql:postgresql
+    volumes:
+      - ./certs:/code/certs
   web:
     build:
         context: .
