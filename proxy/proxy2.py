@@ -106,6 +106,7 @@ class ThreadingHTTPSServer(ThreadingHTTPServer):
     certkey = 'cert.key'
     certdir = 'certs/'
     timeout = 10
+    # match valid domain names, including its subdomain, (e.g. "www.google.com")
     domain_regex = re.compile("((?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+)(?:[A-Z0-9-]{2,63}(?<!-)))",
                               re.IGNORECASE)
 
