@@ -22,8 +22,8 @@ from cStringIO import StringIO
 from subprocess import Popen, PIPE
 
 from django.conf import settings
-from proxy.models import RewriteRules
-from .helper import format_header_keys
+from web.models import RewriteRules
+from web.helper import format_header_keys
 
 
 def with_color(c, s):

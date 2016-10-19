@@ -4,7 +4,8 @@ from __future__ import unicode_literals
 
 import django.contrib.postgres.fields.jsonb
 from django.db import migrations, models
-import proxy.helper
+
+import web.helper
 
 
 class Migration(migrations.Migration):
@@ -19,7 +20,7 @@ class Migration(migrations.Migration):
             name='RewriteRules',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('url', models.CharField(blank=True, max_length=1024, validators=[proxy.helper.validate_regex_string])),
+                ('url', models.CharField(blank=True, max_length=1024, validators=[web.helper.validate_regex_string])),
                 ('headers', django.contrib.postgres.fields.jsonb.JSONField(blank=True, default={})),
                 ('response', models.TextField(blank=True, default=b'')),
                 ('created_date', models.DateTimeField(auto_now_add=True)),
