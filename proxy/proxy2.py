@@ -2,7 +2,6 @@
 import brotli
 import gzip
 import httplib
-import gc
 import json
 import os
 import re
@@ -397,21 +396,20 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         return header_name in req_headers and re.match(header_value_regex, req_headers[header_name])
 
     def intercept_handler(self, req):
-        db_objs = RewriteRules.objects.values('url', 'headers', 'response')  # a dict
+        db_objs = RewriteRules.objects.values('url', 'headers', 'response')
         db_matches = []  # will contain the tuples from `db_objs` that match the url regex
         for db_obj in db_objs:
             if re.match(db_obj['url'], req.path):
                 db_matches.append(db_obj)
-        # run the garbage collector since postgres doesn't seem to be closing connections
-        gc.collect()
         if not db_matches:
             return
         # we treat our headers as case-insensitive and also replace hyphens with underscores
         req_headers = format_header_keys(dict(req.headers))
         for db_match in db_matches:
+            headers = json.loads(db_match['headers'])  # use json.loads since the data is stored as text
             # check if ALL request headers matches the regex in the database, then return the database response
-            if all(self._check_header_matches(db_match_header, db_match['headers'][db_match_header], req_headers)
-                   for db_match_header in db_match['headers']):
+            if all(self._check_header_matches(db_match_header, headers[db_match_header], req_headers)
+                   for db_match_header in headers):
                 # if the loop finishes without breaking, then all headers have matched and we return the response
                 return db_match['response']
 

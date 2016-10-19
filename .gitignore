@@ -6,10 +6,9 @@
 
 *.egg-info/
 .idea/
-build/
-certs/
-dist/
-data/
+/certs/
+/data/
+/databases
 static/
 
 settings_local.py
