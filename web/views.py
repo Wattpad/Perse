@@ -13,7 +13,7 @@ from . import helper
 @api_view(['GET'])
 def index(request):
     entries = RewriteRules.objects.all().order_by('-modified_date')
-    return render(request, 'proxy/index.html', {'entries': entries})
+    return render(request, 'web/index.html', {'entries': entries})
 
 
 @api_view(['GET'])
@@ -27,7 +27,7 @@ def fetch(request):
     :return: HttpResponse with the response stored in the database
     """
     if request.method == 'GET':
-        url, headers, use_regex = helper.get_all_from_request_headers(request.META)
+        url, headers, use_regex = helper.get_request_headers(request.META, as_json_string=True)
 
         if url is not None and headers is not None:
             entry = RewriteRules.objects.get(url=url, headers=headers)
@@ -59,7 +59,7 @@ def store(request):
     :param request: django request
     """
     if request.method == 'POST':
-        url, headers, use_regex = helper.get_all_from_request_headers(request.META, use_default_values=True)
+        url, headers, use_regex = helper.get_request_headers(request.META, use_default_values=True)
         try:
             custom_response = request.data['response']
             if type(custom_response) in (dict, list):
@@ -79,6 +79,9 @@ def store(request):
                 helper.validate_regex_string(headers[header])
             except ValidationError:
                 return HttpResponse("'{}' is not a valid regex string.".format(headers[header]), status=400)
+
+        # after validating the headers, we will store it as a string in the db
+        headers = json.dumps(headers)
 
         if RewriteRules.objects.filter(url=url, headers=headers):
             entry = RewriteRules.objects.get(url=url, headers=headers)
@@ -103,7 +106,7 @@ def delete(request):
     :param request: django request
     """
     if request.method == 'POST':
-        url, headers, use_regex = helper.get_all_from_request_headers(request.META)
+        url, headers, use_regex = helper.get_request_headers(request.META, as_json_string=True)
 
         if url is not None and headers is not None:
             entry = RewriteRules.objects.get(url=url, headers=headers)
