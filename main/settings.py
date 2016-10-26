@@ -24,6 +24,7 @@ ALLOWED_HOSTS = ['*']
 INSTALLED_APPS = [
     'dns',
     'proxy',
+    'web',
 
     'django.contrib.admin',
     'django.contrib.auth',

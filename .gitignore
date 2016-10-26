@@ -9,6 +9,6 @@
 /certs/
 /data/
 /databases
-static/
+/static/
 
 settings_local.py
