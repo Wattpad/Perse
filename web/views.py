@@ -13,7 +13,7 @@ from . import helper
 @api_view(['GET'])
 def index(request):
     entries = RewriteRules.objects.all().order_by('-modified_date')
-    return render(request, 'proxy/index.html', {'entries': entries})
+    return render(request, 'web/index.html', {'entries': entries})
 
 
 @api_view(['GET'])

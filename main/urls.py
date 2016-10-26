@@ -3,5 +3,5 @@ from django.conf.urls import url
 
 
 urlpatterns = [
-    url(r'^proxy/', include('proxy.urls', namespace='proxy')),
+    url(r'^web/', include('web.urls', namespace='web')),
 ]

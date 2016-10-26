@@ -10,6 +10,6 @@ build/
 certs/
 dist/
 data/
-static/
+/static/
 
 settings_local.py
