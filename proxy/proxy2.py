@@ -20,6 +20,7 @@ from HTMLParser import HTMLParser
 from SocketServer import ThreadingMixIn
 from cStringIO import StringIO
 from subprocess import Popen, PIPE
+from OpenSSL import SSL
 
 from django.conf import settings
 from proxy.models import RewriteRules
@@ -28,6 +29,20 @@ from .helper import format_header_keys
 
 def with_color(c, s):
     return "\x1b[%dm%s\x1b[0m" % (c, s)
+
+
+def generate_cert(hostname, cakey, cacert, certkey, certpath):
+    """
+    Generates a signed certificate with our root CA, issued for the given hostname, and stores it in "certpath".
+    """
+    if not os.path.isfile(certpath):
+        epoch = "%d" % (time.time() * 1000)
+
+        p1 = Popen(["openssl", "req", "-new", "-key", certkey, "-subj", "/CN={}".format(hostname)], stdout=PIPE)
+        p2 = Popen(
+            ["openssl", "x509", "-req", "-sha256", "-days", "36500", "-CA", cacert, "-CAkey", cakey,
+             "-set_serial", epoch, "-out", certpath], stdin=p1.stdout, stderr=PIPE)
+        p2.communicate()
 
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
@@ -43,25 +58,82 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
             return HTTPServer.handle_error(self, request, client_address)
 
 
+class SSLContext(object):
+    """
+    Simple mocked SSL connection to allow parsing of the ClientHello
+    (source: https://gist.github.com/DonnchaC/4a89bf7c52500a1d7e7b)
+    """
+
+    def __init__(self):
+        """
+        Initialize an SSL connection object
+        """
+        self.server_name = None
+
+        context = SSL.Context(SSL.SSLv23_METHOD)
+        context.set_tlsext_servername_callback(self.get_servername)
+
+        self.connection = SSL.Connection(context=context)
+        self.connection.set_accept_state()
+
+    def get_servername(self, connection):
+        """
+        Callback to retrieve the parsed SNI extension when it is parsed
+        """
+        self.server_name = connection.get_servername()
+
+    def parse_client_hello(self, client_hello):
+        try:
+            # Write the SSL handshake into the BIO memory stream.
+            self.connection.bio_write(client_hello)
+            # Start parsing the client handshake from the memory stream
+            self.connection.do_handshake()
+        except SSL.Error:
+            # We don't have a complete SSL handshake, only the ClientHello,
+            # close the connection once we hit an error.
+            self.connection.shutdown()
+
+        # Should have run the get_servername callback already
+        return self.server_name
+
+
 class ThreadingHTTPSServer(ThreadingHTTPServer):
     address_family = socket.AF_INET6
     daemon_threads = True
 
     cakey = 'ca.key'
     cacert = 'ca.crt'
+    certkey = 'cert.key'
+    certdir = 'certs/'
+    timeout = 10
+    # match valid domain names, including its subdomain, (e.g. "www.google.com")
+    domain_regex = re.compile("((?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+)(?:[A-Z0-9-]{2,63}(?<!-)))",
+                              re.IGNORECASE)
 
     def get_request(self):
         request, client_address = self.socket.accept()
-        request = ssl.wrap_socket(request, keyfile=self.cakey, certfile=self.cacert, server_side=True)
-        return request, client_address
 
-    def handle_error(self, request, client_address):
-        # suppress socket/ssl related errors
-        cls, e = sys.exc_info()[:2]
-        if cls is socket.error or cls is ssl.SSLError:
-            pass
-        else:
-            return HTTPServer.handle_error(self, request, client_address)
+        context = SSLContext()
+        data = request.recv(65536, socket.MSG_PEEK)
+        hostname = context.parse_client_hello(data)
+
+        # check if either the data or hostname is empty
+        if data is None:
+            request.close()
+            return request, client_address
+        elif hostname is None:
+            # the ClientHello rarely fails to get a result, but if it does we instead use regex to
+            # match the longest url in the encrypted https data
+            match = self.domain_regex.findall(data)
+            if not match:
+                request.close()
+                return request, client_address
+            hostname = sorted(match, key=lambda x: len(x))[-1]
+
+        certpath = os.path.join(self.certdir, hostname + '.crt')
+        generate_cert(hostname, self.cakey, self.cacert, self.certkey, certpath)
+        request = ssl.wrap_socket(request, keyfile=self.certkey, certfile=certpath, server_side=True)
+        return request, client_address
 
 
 class ProxyRequestHandler(BaseHTTPRequestHandler):
@@ -95,14 +167,10 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
     def connect_intercept(self):
         hostname = self.path.split(':')[0]
-        certpath = "%s/%s.crt" % (self.certdir.rstrip('/'), hostname)
+        certpath = os.path.join(self.certdir, hostname + '.crt')
 
         with self.lock:
-            if not os.path.isfile(certpath):
-                epoch = "%d" % (time.time() * 1000)
-                p1 = Popen(["openssl", "req", "-new", "-key", self.certkey, "-subj", "/CN=%s" % hostname], stdout=PIPE)
-                p2 = Popen(["openssl", "x509", "-req", "-sha256", "-days", "36500", "-CA", self.cacert, "-CAkey", self.cakey, "-set_serial", epoch, "-out", certpath], stdin=p1.stdout, stderr=PIPE)
-                p2.communicate()
+            generate_cert(hostname, self.cakey, self.cacert, self.certkey, certpath)
 
         self.wfile.write("%s %d %s\r\n" % (self.protocol_version, 200, 'Connection Established'))
         self.end_headers()
