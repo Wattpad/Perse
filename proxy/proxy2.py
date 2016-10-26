@@ -2,6 +2,7 @@
 import brotli
 import gzip
 import httplib
+import gc
 import json
 import os
 import re
@@ -21,6 +22,8 @@ from cStringIO import StringIO
 from subprocess import Popen, PIPE
 
 from django.conf import settings
+from proxy.models import RewriteRules
+from .helper import format_header_keys
 
 
 def with_color(c, s):
@@ -66,7 +69,9 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     cacert = 'ca.crt'
     certkey = 'cert.key'
     certdir = 'certs/'
-    timeout = 7
+    timeout = 0.75  # overridden attribute for the socket connection
+    request_timeout = 10  # timeout for the request
+
     lock = threading.Lock()
 
     def __init__(self, *args, **kwargs):
@@ -153,12 +158,12 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             return
 
         req_body_modified = self.request_handler(req, req_body)
-        if req_body_modified is False:
-            self.send_error(403)
-            return
-        elif req_body_modified is not None:
+        if req_body_modified:
             req_body = req_body_modified
             req.headers['Content-length'] = str(len(req_body))
+        elif req_body_modified is False:
+            self.send_error(403)
+            return
 
         u = urlparse.urlsplit(req.path)
         scheme, netloc, path = u.scheme, u.netloc, (u.path + '?' + u.query if u.query else u.path)
@@ -167,17 +172,30 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             req.headers['Host'] = netloc
         req_headers = self.filter_headers(req.headers)
 
+        intercepted_body = self.intercept_handler(req)
+        if intercepted_body is not None:
+            intercepted_body = intercepted_body.encode('utf-8')
+            self.wfile.write("%s %d %s\r\n" % (self.protocol_version, 200, ''))
+            self.wfile.write('Content-Encoding: identity\r\n')
+            self.wfile.write('Content-Length: {}\r\n'.format(str(len(intercepted_body))))
+            self.wfile.write('Content-Type: charset=UTF-8\r\n')
+            self.end_headers()
+            self.wfile.write(intercepted_body)
+            self.wfile.flush()
+            return
+
         try:
             origin = (scheme, netloc)
             if origin not in self.tls.conns:
                 if scheme == 'https':
-                    self.tls.conns[origin] = httplib.HTTPSConnection(netloc, timeout=self.timeout)
+                    self.tls.conns[origin] = httplib.HTTPSConnection(netloc, timeout=self.request_timeout)
                 else:
-                    self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.timeout)
+                    self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.request_timeout)
             conn = self.tls.conns[origin]
             conn.request(self.command, path, req_body, dict(req_headers))
             res = conn.getresponse()
             res_body = res.read()
+            conn.close()
         except Exception as e:
             if origin in self.tls.conns:
                 del self.tls.conns[origin]
@@ -185,20 +203,20 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             return
 
         version_table = {10: 'HTTP/1.0', 11: 'HTTP/1.1'}
-        setattr(res, 'headers', res.msg)
-        setattr(res, 'response_version', version_table[res.version])
+        res.headers = res.msg
+        res.response_version = version_table[res.version]
 
         content_encoding = res.headers.get('Content-Encoding', 'identity')
         res_body_plain = self.decode_content_body(res_body, content_encoding)
 
         res_body_modified = self.response_handler(req, req_body, res, res_body_plain)
-        if res_body_modified is False:
-            self.send_error(403)
-            return
-        elif res_body_modified is not None:
+        if res_body_modified:
             res_body_plain = res_body_modified
             res_body = self.encode_content_body(res_body_plain, content_encoding)
             res.headers['Content-Length'] = str(len(res_body))
+        elif res_body_modified is False:
+            self.send_error(403)
+            return
 
         res_headers = self.filter_headers(res.headers)
 
@@ -209,12 +227,14 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(res_body)
         self.wfile.flush()
 
-        with self.lock:
-            self.save_handler(req, req_body, res, res_body_plain)
+        # Uncomment below if you want to do something with the response
+        # with self.lock:
+        #     self.save_handler(req, req_body, res, res_body_plain)
 
     do_HEAD = do_GET
     do_POST = do_GET
     do_OPTIONS = do_GET
+    do_DELETE = do_GET
 
     def filter_headers(self, headers):
         # http://tools.ietf.org/html/rfc2616#section-13.5.1
@@ -288,8 +308,6 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         def parse_qsl(s):
             return '\n'.join("%-20s %s" % (k, v) for k, v in urlparse.parse_qsl(s, keep_blank_values=True))
 
-        if not settings.DEBUG:
-            return
         req_header_text = "%s %s %s\n%s" % (req.command, req.path, req.request_version, req.headers)
         res_header_text = "%s %d %s\n%s" % (res.response_version, res.status, res.reason, res.headers)
 
@@ -366,6 +384,37 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             if res_body_text:
                 print with_color(32, "==== RESPONSE BODY ====\n%s\n" % res_body_text)
 
+    def _check_header_matches(self, header_name, header_value_regex, req_headers):
+        """
+        Checks whether a header pair from a request's headers matches the regex defined in the database with the same
+        header key.
+
+        :param header_name: the name of a header (str)
+        :param header_value_regex: a regex string that will be matched to `req_headers`'s header value
+        :param req_headers: a dict of {header names: header value}
+        :return: whether the request header value matches the regex in the database
+        """
+        return header_name in req_headers and re.match(header_value_regex, req_headers[header_name])
+
+    def intercept_handler(self, req):
+        db_objs = RewriteRules.objects.values('url', 'headers', 'response')  # a dict
+        db_matches = []  # will contain the tuples from `db_objs` that match the url regex
+        for db_obj in db_objs:
+            if re.match(db_obj['url'], req.path):
+                db_matches.append(db_obj)
+        # run the garbage collector since postgres doesn't seem to be closing connections
+        gc.collect()
+        if not db_matches:
+            return
+        # we treat our headers as case-insensitive and also replace hyphens with underscores
+        req_headers = format_header_keys(dict(req.headers))
+        for db_match in db_matches:
+            # check if ALL request headers matches the regex in the database, then return the database response
+            if all(self._check_header_matches(db_match_header, db_match['headers'][db_match_header], req_headers)
+                   for db_match_header in db_match['headers']):
+                # if the loop finishes without breaking, then all headers have matched and we return the response
+                return db_match['response']
+
     def request_handler(self, req, req_body):
         pass
 
@@ -373,7 +422,8 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         pass
 
     def save_handler(self, req, req_body, res, res_body):
-        self.print_info(req, req_body, res, res_body)
+        if settings.DEBUG:
+            self.print_info(req, req_body, res, res_body)
 
 
 def run_http(HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPServer, protocol="HTTP/1.1"):
@@ -398,8 +448,6 @@ def run_https(HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPSServer
 
     sa = httpd.socket.getsockname()
     print('*' * 80)
-    print("There may be an issue with Chrome on OS X:")
-    print("See http://stackoverflow.com/questions/27294589/")
     print("Serving HTTPS Proxy on {} port {}...".format(sa[0], sa[1]))
     httpd.serve_forever()
 

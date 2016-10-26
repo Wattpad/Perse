@@ -1,13 +1,15 @@
-*.pyc
-*.sqlite*
-*.pid
 *.crt
 *.key
+*.pid
+*.pyc
+*.sqlite*
 
+*.egg-info/
 .idea/
 build/
-dist/
 certs/
-*.egg-info/
+dist/
+data/
+static/
 
 settings_local.py

@@ -19,3 +19,30 @@ services:
     dns:
       - 8.8.4.4
       - 8.8.8.8
+    links:
+      - postgresql:postgresql
+    volumes:
+      - ./certs:/code/certs
+  web:
+    build:
+        context: .
+        dockerfile: Dockerfile_web
+    command: /code/startweb.sh
+    ports:
+      - "8000:8000"
+    links:
+      - postgresql:postgresql
+    volumes:
+      - .:/code
+    volumes_from:
+      - postgresql
+  postgresql:
+    image: postgres:9.5.4
+    environment:
+      - POSTGRES_DB=rewrite_db
+      - POSTGRES_USER=docker
+      - POSTGRES_PASSWORD=docker
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data:/var/lib/postgresql/data/
