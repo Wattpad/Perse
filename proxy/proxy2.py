@@ -3,6 +3,7 @@ import brotli
 import gzip
 import httplib
 import json
+import gc
 import os
 import re
 import select
@@ -469,6 +470,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         for db_obj in db_objs:
             if re.match(db_obj['url'], req.path):
                 db_matches.append(db_obj)
+        gc.collect()
         if not db_matches:
             return
         # we treat our headers as case-insensitive and also replace hyphens with underscores

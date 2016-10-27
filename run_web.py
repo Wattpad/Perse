@@ -1,17 +1,17 @@
 #!/usr/bin/python
+import os
 import subprocess
 
 
+cwd = os.getcwd()
 build = 'docker build . -f Dockerfile_web'
-# http://stackoverflow.com/questions/36489696/cannot-link-to-a-running-container-started-by-docker-compose
-run = 'docker run -p "8000:8000" --link "dnsserver_postgresql_1:postgresql" --volumes-from "dnsserver_postgresql_1" ' \
-      '--net dnsserver_default {}'
+run = 'docker run -p "8000:8000" -v {}:/code {}'
 kill = 'docker kill {}'
 
 image = subprocess.check_output(build, shell=True).strip().split('\n')[-1].split()[-1]
 print(image)
 try:
-    subprocess.call(run.format(image), shell=True)
+    subprocess.call(run.format(cwd, image), shell=True)
 except KeyboardInterrupt:
     print("\nKeyboardInterrupt")
     container = [group.split()[0]

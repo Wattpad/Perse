@@ -1,15 +1,18 @@
 #!/usr/bin/python
+import os
 import subprocess
 
 
+cwd = os.getcwd()
 build = 'docker build . -f Dockerfile_proxy'
-run = 'docker run -p "80:80" -p "443:443" --dns="8.8.4.4" --dns "8.8.8.8" {}'
+run = 'docker run -p "80:80" -p "443:443" --dns="8.8.4.4" --dns "8.8.8.8" ' \
+      '-v {0}/certs:/code/certs -v {0}/databases:/code/databases {1}'
 kill = 'docker kill {}'
 
 image = subprocess.check_output(build, shell=True).strip().split('\n')[-1].split()[-1]
 print(image)
 try:
-    subprocess.call(run.format(image), shell=True)
+    subprocess.call(run.format(cwd, image), shell=True)
 except KeyboardInterrupt:
     print("\nKeyboardInterrupt")
     container = [group.split()[0]
