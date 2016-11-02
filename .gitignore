@@ -2,13 +2,12 @@
 *.key
 *.pid
 *.pyc
-*.sqlite*
+*.sqlite3*
 
 *.egg-info/
 .idea/
 /certs/
 /data/
-/databases
 /static/
 
 settings_local.py

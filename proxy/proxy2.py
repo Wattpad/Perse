@@ -132,7 +132,10 @@ class ThreadingHTTPSServer(ThreadingHTTPServer):
 
         certpath = os.path.join(self.certdir, hostname + '.crt')
         generate_cert(hostname, self.cakey, self.cacert, self.certkey, certpath)
-        request = ssl.wrap_socket(request, keyfile=self.certkey, certfile=certpath, server_side=True)
+        try:
+            request = ssl.wrap_socket(request, keyfile=self.certkey, certfile=certpath, server_side=True)
+        except Exception as e:
+            pass
         return request, client_address
 
 
