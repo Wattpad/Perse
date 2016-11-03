@@ -1,7 +1,6 @@
-# DNS Proxy
+# Perse
 
-[![Travis Build](https://travis-ci.org/Wattpad/kube-sqs-autoscaler.svg?branch=latest)](https://travis-ci.org/Wattpad/dns-server)
-[![Coverage Status](https://coveralls.io/repos/github/Wattpad/dns-server/badge.svg?branch=master)](https://coveralls.io/github/Wattpad/dns-server?branch=master)
+[![Travis Build](https://travis-ci.org/Wattpad/Perse.svg?branch=master)](https://travis-ci.org/Wattpad/Perse)
 
 ## Setup
 * Python 2.7

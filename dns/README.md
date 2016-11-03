@@ -4,10 +4,10 @@
 
 Needed: Python 2.7 (Twisted's DNS server isn't supported in version 3, unfortunately.)
 
-1. `git clone https://github.com/Wattpad/dns-server`
+1. `git clone https://github.com/Wattpad/Perse`
 2. `virtualenv2 virtualenv`
 3. Make sure `virtualenv/bin` is in `PATH`.
-4. `cd dns-server`
+4. `cd Perse`
 5. `pip install -r requirements.txt`
 
 
